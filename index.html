@@ -4,283 +4,363 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Escáner de Inventario</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background-color: #0b0f19; color: #e2e8f0; display: flex; flex-direction: column; height: 100vh; max-width: 500px; margin: 0 auto; padding: 10px; }
-    
-    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #111827; border-radius: 8px; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
-    .header-left { display: flex; align-items: center; gap: 8px; }
-    .status-ram { color: #10b981; }
-    .btn-cfg { background: #334155; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
-    
-    .scanner-container { position: relative; width: 100%; height: 210px; background: #000; border-radius: 12px; overflow: hidden; border: 2px solid #10b981; }
-    #interactive.viewport video, #interactive.viewport canvas { width: 100%; height: 100%; object-fit: cover; }
-    .target-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 60%; border: 2px dashed rgba(255, 255, 255, 0.6); border-radius: 8px; pointer-events: none; }
-    
-    .btn-cam { position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 12px; z-index: 10; cursor: pointer; }
-    
-    .counter-bar { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 8px 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 8px; }
-    .counter-info { display: flex; flex-direction: column; gap: 2px; }
-    .counter-value { font-size: 18px; font-weight: bold; color: #38bdf8; }
-    
-    select.user-select { background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-
-    .section-title { font-size: 11px; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px; }
-    .lecturas-container { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-    
-    .item-lectura { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 13px; font-weight: bold; }
-    .item-ok { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
-    .item-no-existe { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; }
-    
-    .btn-delete { background: #ef4444; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; margin-left: 8px; }
-
-    /* Modal de Configuración */
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
-    .modal-content { background: #1e293b; padding: 20px; border-radius: 12px; width: 90%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
-    .modal-content h3 { font-size: 16px; color: #f8fafc; margin-bottom: 4px; }
-    .modal-group { display: flex; flex-direction: column; gap: 4px; }
-    .modal-group label { font-size: 12px; color: #94a3b8; }
-    .modal-group input { background: #0f172a; color: white; border: 1px solid #334155; padding: 8px; border-radius: 6px; font-size: 14px; }
-    .btn-close-modal { background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+    #reader video { object-fit: cover !important; border-radius: 12px; }
   </style>
 </head>
-<body>
+<body class="bg-gray-950 text-white font-sans antialiased select-none">
 
-  <div class="header">
-    <div class="header-left">
-      <span>⚡ ESCÁNER EAN-13</span>
-      <button class="btn-cfg" onclick="abrirConfiguracion()">⚙️ Config</button>
-    </div>
-    <span class="status-ram" id="ramText">RAM: Cargando...</span>
-  </div>
+  <div id="root"></div>
 
-  <div class="scanner-container">
-    <button class="btn-cam" id="btnToggleCam" onclick="toggleCamara()">Detener</button>
-    <div id="interactive" class="viewport"></div>
-    <div class="target-box"></div>
-  </div>
+  <script type="text/babel">
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby2M4uoO5I2c59rdFG0EO3Tz5c4yYAZjgO3a7D0XEQmo4tteISQYna9eTT_tqybWs0C/exec";
 
-  <div class="counter-bar">
-    <div class="counter-info">
-      <div>
-        <label style="font-size: 11px; color: #94a3b8;">Usuario: </label>
-        <select id="selectUsuario" class="user-select" onchange="cambiarUsuario()">
-          <option value="">Cargando...</option>
-        </select>
-      </div>
-      <div style="font-size: 12px; margin-top:2px;">Turno: <span class="counter-value" id="cntSesion">0</span> escaneos</div>
-    </div>
-  </div>
+    const { useState, useEffect, useRef } = React;
 
-  <div class="section-title">ÚLTIMAS LECTURAS (Solo EAN-13 iniciando en 1)</div>
-  <div class="lecturas-container" id="listaLecturas"></div>
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-  <!-- Modal de Configuración -->
-  <div class="modal" id="modalConfig">
-    <div class="modal-content">
-      <h3>⚙️ Ajustes de Escáner</h3>
-      
-      <div class="modal-group">
-        <label>Tiempo de enfriamiento (segundos):</label>
-        <input type="number" id="inputCooldown" step="0.1" min="0.5" max="5.0" value="1.8">
-        <span style="font-size: 10px; color: #64748b;">Evita registrar lecturas repetidas por accidente.</span>
-      </div>
+    const sonarExito = () => {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1800, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.08);
+    };
 
-      <button class="btn-close-modal" onclick="guardarConfiguracion()">Guardar y Cerrar</button>
-    </div>
-  </div>
-
-  <script>
-const URL_APPSCRIPT = "https://script.google.com/macros/s/AKfycby2M4uoO5I2c59rdFG0EO3Tz5c4yYAZjgO3a7D0XEQmo4tteISQYna9eTT_tqybWs0C/exec";
-
-    let baseRAM = new Set();
-    let usuariosLista = [];
-    let escaneando = false;
-    let ultimoEscaneoTiempo = 0;
-    let conteoTurno = 0;
-    let usuarioActual = localStorage.getItem("inv_usuario") || "";
-    
-    // Configuración recuperada o por defecto
-    let cooldownSegundos = parseFloat(localStorage.getItem("inv_cooldown")) || 1.8;
-
-    async function cargarDatos() {
-      try {
-        const resp = await fetch(URL_APPSCRIPT);
-        const data = await resp.json();
-        
-        baseRAM = new Set(data.codigos);
-        usuariosLista = data.usuarios || [];
-        
-        document.getElementById("ramText").innerText = `RAM: ${baseRAM.size} regs`;
-        poblarSelectorUsuarios();
-      } catch (e) {
-        document.getElementById("ramText").innerText = "Error al cargar";
-      }
-    }
-
-    function poblarSelectorUsuarios() {
-      const select = document.getElementById("selectUsuario");
-      select.innerHTML = "";
-
-      if (usuariosLista.length === 0) {
-        select.innerHTML = `<option value="">Sin Usuarios Activos</option>`;
-        return;
-      }
-
-      usuariosLista.forEach(user => {
-        const opt = document.createElement("option");
-        opt.value = user;
-        opt.textContent = user;
-        select.appendChild(opt);
+    const sonarError = () => {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      [0, 0.12].forEach((delay) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, audioCtx.currentTime + delay);
+        gain.gain.setValueAtTime(0.25, audioCtx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.1);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + 0.1);
       });
+    };
 
-      if (usuariosLista.includes(usuarioActual)) {
-        select.value = usuarioActual;
-      } else {
-        usuarioActual = usuariosLista[0];
-        select.value = usuarioActual;
-        localStorage.setItem("inv_usuario", usuarioActual);
-      }
-    }
+    function App() {
+      const [dbLocal, setDbLocal] = useState([]);
+      const [usuarios, setUsuarios] = useState([]);
+      const [usuarioSel, setUsuarioSel] = useState(localStorage.getItem("inv_usuario") || "");
+      const [cargandoBase, setCargandoBase] = useState(true);
+      const [escaneando, setEscaneando] = useState(false);
+      const [historial, setHistorial] = useState([]);
+      const [codigoManual, setCodigoManual] = useState("");
+      const [cooldown, setCooldown] = useState(parseFloat(localStorage.getItem("inv_cooldown")) || 1.5);
+      const [mostrarModal, setMostrarModal] = useState(false);
+      const [contadorTurno, setContadorTurno] = useState(0);
 
-    function cambiarUsuario() {
-      const select = document.getElementById("selectUsuario");
-      usuarioActual = select.value;
-      localStorage.setItem("inv_usuario", usuarioActual);
-      conteoTurno = 0;
-      document.getElementById("cntSesion").innerText = "0";
-    }
+      const scannerRef = useRef(null);
+      const ultimoCodigoRef = useRef('');
+      const tiempoUltimoEscaneoRef = useRef(0);
 
-    function enviarAGoogleSheets(codigo, accion = "guardar") {
-      const formData = new FormData();
-      formData.append("codigo", codigo);
-      formData.append("usuario", usuarioActual);
-      formData.append("accion", accion);
-      fetch(URL_APPSCRIPT, { method: "POST", body: formData });
-    }
+      useEffect(() => {
+        cargarBaseEnRAM();
+      }, []);
 
-    function procesarCodigo(codigo) {
-      // 1. Validar que sea un EAN-13 válido (Exactamente 13 dígitos y comience con '1')
-      const esValidoEAN13 = /^1\d{12}$/.test(codigo);
-      if (!esValidoEAN13) return; // Ignora cualquier otro código sin interrumpir
+      const cargarBaseEnRAM = async () => {
+        setCargandoBase(true);
+        try {
+          const res = await fetch(WEB_APP_URL, { redirect: "follow" });
+          const data = await res.json();
+          
+          const codigos = Array.isArray(data) ? data : (data.codigos || []);
+          const usrs = data.usuarios || [];
 
-      // 2. Controlar enfriamiento dinámico según configuración
-      const ahora = Date.now();
-      if (ahora - ultimoEscaneoTiempo < (cooldownSegundos * 1000)) return;
-      ultimoEscaneoTiempo = ahora;
+          setDbLocal(codigos);
+          setUsuarios(usrs);
 
-      if (!usuarioActual) {
-        alert("Por favor selecciona un usuario válido");
-        return;
-      }
+          if (usrs.length > 0 && !usrs.includes(usuarioSel)) {
+            setUsuarioSel(usrs[0]);
+            localStorage.setItem("inv_usuario", usrs[0]);
+          }
 
-      const existe = baseRAM.has(codigo);
-      
-      if (existe) {
-        conteoTurno++;
-        document.getElementById("cntSesion").innerText = conteoTurno;
-        enviarAGoogleSheets(codigo, "guardar");
-        agregarALista(codigo, true);
-      } else {
-        agregarALista(codigo, false);
-      }
-    }
+          setCargandoBase(false);
+        } catch (err) {
+          alert("Error al conectar con la base de datos: " + err);
+          setCargandoBase(false);
+        }
+      };
 
-    function agregarALista(codigo, existe) {
-      const lista = document.getElementById("listaLecturas");
-      const div = document.createElement("div");
-      div.className = `item-lectura ${existe ? 'item-ok' : 'item-no-existe'}`;
-      
-      const btnBorrarHtml = existe 
-        ? `<button class="btn-delete" onclick="borrarLectura(this, '${codigo}')">Borrar</button>` 
-        : '';
+      const cambiarUsuario = (u) => {
+        setUsuarioSel(u);
+        localStorage.setItem("inv_usuario", u);
+        setContadorTurno(0);
+      };
 
-      div.innerHTML = `
-        <span>${codigo}</span>
-        <div style="display:flex; align-items:center;">
-          <span>${existe ? 'OK' : 'NO EXISTE'}</span>
-          ${btnBorrarHtml}
+      const iniciarLectorContinuo = async () => {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        try {
+          const html5QrCode = new Html5Qrcode("reader");
+          scannerRef.current = html5QrCode;
+
+          const config = { 
+            fps: 20, 
+            qrbox: { width: 260, height: 160 },
+            aspectRatio: 1.0
+          };
+
+          setEscaneando(true);
+
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => {
+              const codigoLeido = decodedText.trim();
+              const ahora = Date.now();
+
+              if (codigoLeido !== ultimoCodigoRef.current || (ahora - tiempoUltimoEscaneoRef.current) > (cooldown * 1000)) {
+                ultimoCodigoRef.current = codigoLeido;
+                tiempoUltimoEscaneoRef.current = ahora;
+                procesarCodigoLocal(codigoLeido);
+              }
+            },
+            () => {}
+          );
+
+        } catch (err) {
+          setEscaneando(false);
+          alert("Error de inicio de cámara: " + err);
+        }
+      };
+
+      const detenerLector = async () => {
+        if (scannerRef.current && escaneando) {
+          try {
+            await scannerRef.current.stop();
+            scannerRef.current.clear();
+          } catch(e) {}
+          setEscaneando(false);
+        }
+      };
+
+      const procesarCodigoLocal = (codigo) => {
+        // Valida si el código de barras escaneado CONTIENE el código de la base de datos o si es idéntico
+        const existe = dbLocal.some(codigoBase => String(codigo).includes(String(codigoBase).trim()));
+
+        if (existe) {
+          sonarExito();
+          setContadorTurno(prev => prev + 1);
+          
+          setHistorial(prev => [
+            { id: Date.now(), success: true, codigo: codigo, fecha: new Date().toLocaleTimeString() }, 
+            ...prev.slice(0, 9)
+          ]);
+          
+          enviarAGoogleSheets(codigo, "guardar");
+        } else {
+          sonarError();
+          setHistorial(prev => [
+            { id: Date.now(), success: false, codigo: codigo, fecha: new Date().toLocaleTimeString() }, 
+            ...prev.slice(0, 9)
+          ]);
+        }
+      };
+
+      const enviarAGoogleSheets = (codigo, accion) => {
+        const formData = new URLSearchParams();
+        formData.append("codigo", codigo);
+        formData.append("usuario", usuarioSel || "Anónimo");
+        formData.append("accion", accion);
+
+        fetch(WEB_APP_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData
+        });
+      };
+
+      const manejarEnvioManual = (e) => {
+        e.preventDefault();
+        if (!codigoManual.trim()) return;
+        procesarCodigoLocal(codigoManual.trim());
+        setCodigoManual("");
+      };
+
+      const borrarLectura = (item) => {
+        if (confirm(`¿Deseas eliminar el registro ${item.codigo}?`)) {
+          setHistorial(prev => prev.filter(i => i.id !== item.id));
+          if (item.success && contadorTurno > 0) {
+            setContadorTurno(prev => prev - 1);
+          }
+          enviarAGoogleSheets(item.codigo, "eliminar");
+        }
+      };
+
+      const guardarAjustes = (nuevoCooldown) => {
+        setCooldown(nuevoCooldown);
+        localStorage.setItem("inv_cooldown", nuevoCooldown);
+        setMostrarModal(false);
+      };
+
+      return (
+        <div class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto relative">
+          
+          <div class="space-y-3">
+            {/* Cabecera */}
+            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+              <div class="flex items-center gap-2">
+                <h1 class="text-xs font-bold tracking-wider uppercase text-gray-200">
+                  ⚡ ESCÁNER CONTINUO
+                </h1>
+                <button 
+                  onClick={() => setMostrarModal(true)} 
+                  class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded border border-gray-700"
+                >
+                  ⚙️
+                </button>
+              </div>
+              <span class="text-xs font-mono font-bold text-emerald-400">RAM: {dbLocal.length} regs</span>
+            </div>
+
+            {/* Selector de Usuario y Contador */}
+            <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded-xl border border-gray-800 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">Usuario:</span>
+                <select 
+                  value={usuarioSel} 
+                  onChange={(e) => cambiarUsuario(e.target.value)}
+                  class="bg-gray-950 text-emerald-400 font-bold px-2 py-1 rounded border border-gray-800 focus:outline-none"
+                >
+                  {usuarios.length === 0 && <option value="">Sin Usuarios</option>}
+                  {usuarios.map((u, i) => <option key={i} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div>
+                Turno: <span class="text-emerald-400 font-bold text-sm">{contadorTurno}</span>
+              </div>
+            </div>
+
+            {/* Cuadro de la Cámara */}
+            <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative min-h-[240px] flex flex-col items-center justify-center shadow-2xl">
+              <div id="reader" class="w-full h-full"></div>
+
+              {!escaneando && (
+                <div class="p-6 text-center space-y-4 absolute inset-0 bg-gray-900 flex flex-col justify-center items-center z-10">
+                  <p class="text-xs text-gray-400">
+                    {cargandoBase ? "Cargando registros desde la nube..." : "Listo para escanear"}
+                  </p>
+                  <button 
+                    onClick={iniciarLectorContinuo}
+                    disabled={cargandoBase}
+                    class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm py-3 px-6 rounded-xl shadow-lg transition disabled:opacity-50"
+                  >
+                    ⚡ INICIAR CÁMARA
+                  </button>
+                </div>
+              )}
+
+              {escaneando && (
+                <button 
+                  onClick={detenerLector}
+                  class="absolute top-3 right-3 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-lg z-20 shadow-md"
+                >
+                  Detener
+                </button>
+              )}
+            </div>
+
+            {/* Ingreso Manual de Código */}
+            <form onSubmit={manejarEnvioManual} class="flex gap-2">
+              <input 
+                type="number"
+                placeholder="Ingreso manual (ej. 5016977)"
+                value={codigoManual}
+                onChange={(e) => setCodigoManual(e.target.value)}
+                class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+              />
+              <button 
+                type="submit"
+                class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl active:scale-95 transition"
+              >
+                Agregar
+              </button>
+            </form>
+          </div>
+
+          {/* Lista de Últimas Lecturas con Botón Borrar */}
+          {historial.length > 0 && (
+            <div class="mt-3 border-t border-gray-800 pt-2">
+              <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas</p>
+              <div class="space-y-1 max-h-40 overflow-y-auto">
+                {historial.map((item) => (
+                  <div key={item.id} class={`flex justify-between items-center px-3 py-1.5 rounded font-mono text-xs ${item.success ? 'bg-gray-900 text-emerald-400 border border-emerald-900/40' : 'bg-red-950/40 text-red-400 border border-red-900/60'}`}>
+                    <span>{item.codigo}</span>
+                    <div class="flex items-center gap-2">
+                      <span class="text-[10px] font-bold">{item.success ? 'OK' : 'NO EXISTE'}</span>
+                      {item.success && (
+                        <button 
+                          onClick={() => borrarLectura(item)}
+                          class="bg-red-600/80 hover:bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-sans font-bold"
+                        >
+                          Borrar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Modal Ajustes */}
+          {mostrarModal && (
+            <div class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+              <div class="bg-gray-900 border border-gray-800 p-4 rounded-2xl w-full max-w-xs space-y-4">
+                <h3 class="text-sm font-bold text-gray-200">⚙️ Ajustes de Escáner</h3>
+                <div>
+                  <label class="text-xs text-gray-400 block mb-1">Enfriamiento entre lecturas (seg):</label>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    min="0.5"
+                    max="5"
+                    defaultValue={cooldown}
+                    id="inputCool"
+                    class="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white"
+                  />
+                </div>
+                <div class="flex justify-end gap-2">
+                  <button 
+                    onClick={() => setMostrarModal(false)}
+                    class="text-xs text-gray-400 px-3 py-1.5"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={() => guardarAjustes(parseFloat(document.getElementById("inputCool").value) || 1.5)}
+                    class="bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
-      `;
-
-      lista.prepend(div);
-
-      if (lista.children.length > 8) {
-        lista.removeChild(lista.lastChild);
-      }
+      );
     }
 
-    function borrarLectura(btnElemento, codigo) {
-      if (confirm(`¿Deseas eliminar el escaneo del código ${codigo}?`)) {
-        const fila = btnElemento.closest(".item-lectura");
-        fila.remove();
-
-        if (conteoTurno > 0) {
-          conteoTurno--;
-          document.getElementById("cntSesion").innerText = conteoTurno;
-        }
-
-        enviarAGoogleSheets(codigo, "eliminar");
-      }
-    }
-
-    // Funciones del Modal de Configuración
-    function abrirConfiguracion() {
-      document.getElementById("inputCooldown").value = cooldownSegundos;
-      document.getElementById("modalConfig").style.display = "flex";
-    }
-
-    function guardarConfiguracion() {
-      const val = parseFloat(document.getElementById("inputCooldown").value);
-      if (val >= 0.5 && val <= 5.0) {
-        cooldownSegundos = val;
-        localStorage.setItem("inv_cooldown", cooldownSegundos);
-        document.getElementById("modalConfig").style.display = "none";
-      } else {
-        alert("Introduce un tiempo entre 0.5 y 5.0 segundos.");
-      }
-    }
-
-    function iniciarCamara() {
-      Quagga.init({
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: document.querySelector("#interactive"),
-          constraints: { facingMode: "environment" }
-        },
-        decoder: { readers: ["ean_reader"] } // Configurado específicamente para EAN-13
-      }, function(err) {
-        if (!err) {
-          Quagga.start();
-          escaneando = true;
-        }
-      });
-
-      Quagga.onDetected(res => {
-        if (res && res.codeResult && res.codeResult.code) {
-          procesarCodigo(res.codeResult.code.trim());
-        }
-      });
-    }
-
-    function toggleCamara() {
-      const btn = document.getElementById("btnToggleCam");
-      if (escaneando) {
-        Quagga.stop();
-        escaneando = false;
-        btn.innerText = "Iniciar";
-        btn.style.background = "#10b981";
-      } else {
-        iniciarCamara();
-        btn.innerText = "Detener";
-        btn.style.background = "#ef4444";
-      }
-    }
-
-    cargarDatos();
-    iniciarCamara();
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
