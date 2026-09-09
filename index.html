@@ -3,208 +3,284 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Escáner de Cámara</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>Escáner de Inventario</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: #0b0f19; color: #e2e8f0; display: flex; flex-direction: column; height: 100vh; max-width: 500px; margin: 0 auto; padding: 10px; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #111827; border-radius: 8px; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+    .header-left { display: flex; align-items: center; gap: 8px; }
+    .status-ram { color: #10b981; }
+    .btn-cfg { background: #334155; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    
+    .scanner-container { position: relative; width: 100%; height: 210px; background: #000; border-radius: 12px; overflow: hidden; border: 2px solid #10b981; }
+    #interactive.viewport video, #interactive.viewport canvas { width: 100%; height: 100%; object-fit: cover; }
+    .target-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 60%; border: 2px dashed rgba(255, 255, 255, 0.6); border-radius: 8px; pointer-events: none; }
+    
+    .btn-cam { position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 12px; z-index: 10; cursor: pointer; }
+    
+    .counter-bar { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 8px 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 8px; }
+    .counter-info { display: flex; flex-direction: column; gap: 2px; }
+    .counter-value { font-size: 18px; font-weight: bold; color: #38bdf8; }
+    
+    select.user-select { background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+
+    .section-title { font-size: 11px; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px; }
+    .lecturas-container { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    
+    .item-lectura { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 13px; font-weight: bold; }
+    .item-ok { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
+    .item-no-existe { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; }
+    
+    .btn-delete { background: #ef4444; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; margin-left: 8px; }
+
+    /* Modal de Configuración */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
+    .modal-content { background: #1e293b; padding: 20px; border-radius: 12px; width: 90%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-content h3 { font-size: 16px; color: #f8fafc; margin-bottom: 4px; }
+    .modal-group { display: flex; flex-direction: column; gap: 4px; }
+    .modal-group label { font-size: 12px; color: #94a3b8; }
+    .modal-group input { background: #0f172a; color: white; border: 1px solid #334155; padding: 8px; border-radius: 6px; font-size: 14px; }
+    .btn-close-modal { background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+  </style>
 </head>
-<body class="bg-gray-950 text-white font-sans antialiased select-none">
+<body>
 
-  <div id="root"></div>
+  <div class="header">
+    <div class="header-left">
+      <span>⚡ ESCÁNER EAN-13</span>
+      <button class="btn-cfg" onclick="abrirConfiguracion()">⚙️ Config</button>
+    </div>
+    <span class="status-ram" id="ramText">RAM: Cargando...</span>
+  </div>
 
-  <script type="text/babel">
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby2M4uoO5I2c59rdFG0EO3Tz5c4yYAZjgO3a7D0XEQmo4tteISQYna9eTT_tqybWs0C/exec";
+  <div class="scanner-container">
+    <button class="btn-cam" id="btnToggleCam" onclick="toggleCamara()">Detener</button>
+    <div id="interactive" class="viewport"></div>
+    <div class="target-box"></div>
+  </div>
 
-    const { useState, useEffect, useRef } = React;
+  <div class="counter-bar">
+    <div class="counter-info">
+      <div>
+        <label style="font-size: 11px; color: #94a3b8;">Usuario: </label>
+        <select id="selectUsuario" class="user-select" onchange="cambiarUsuario()">
+          <option value="">Cargando...</option>
+        </select>
+      </div>
+      <div style="font-size: 12px; margin-top:2px;">Turno: <span class="counter-value" id="cntSesion">0</span> escaneos</div>
+    </div>
+  </div>
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  <div class="section-title">ÚLTIMAS LECTURAS (Solo EAN-13 iniciando en 1)</div>
+  <div class="lecturas-container" id="listaLecturas"></div>
 
-    const sonarExito = () => {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1800, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.08);
-    };
-
-    const sonarError = () => {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      [0, 0.12].forEach((delay) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(180, audioCtx.currentTime + delay);
-        gain.gain.setValueAtTime(0.25, audioCtx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.1);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(audioCtx.currentTime + delay);
-        osc.stop(audioCtx.currentTime + delay + 0.1);
-      });
-    };
-
-    function App() {
-      const [dbLocal, setDbLocal] = useState([]);
-      const [cargandoBase, setCargandoBase] = useState(true);
-      const [escaneando, setEscaneando] = useState(false);
-      const [historial, setHistorial] = useState([]);
+  <!-- Modal de Configuración -->
+  <div class="modal" id="modalConfig">
+    <div class="modal-content">
+      <h3>⚙️ Ajustes de Escáner</h3>
       
-      const scannerRef = useRef(null);
-      const ultimoCodigoRef = useRef('');
-      const tiempoUltimoEscaneoRef = useRef(0);
+      <div class="modal-group">
+        <label>Tiempo de enfriamiento (segundos):</label>
+        <input type="number" id="inputCooldown" step="0.1" min="0.5" max="5.0" value="1.8">
+        <span style="font-size: 10px; color: #64748b;">Evita registrar lecturas repetidas por accidente.</span>
+      </div>
 
-      useEffect(() => {
-        cargarBaseEnRAM();
-      }, []);
+      <button class="btn-close-modal" onclick="guardarConfiguracion()">Guardar y Cerrar</button>
+    </div>
+  </div>
 
-      const cargarBaseEnRAM = async () => {
-        setCargandoBase(true);
-        try {
-          // redirect: "follow" permite a la aplicación seguir la redirección segura de Google Apps Script
-          const res = await fetch(WEB_APP_URL, { redirect: "follow" });
-          const codigos = await res.json();
-          setDbLocal(Array.isArray(codigos) ? codigos : []);
-          setCargandoBase(false);
-        } catch (err) {
-          alert("Error al conectar con la base de datos: " + err);
-          setCargandoBase(false);
-        }
-      };
+  <script>
+    const URL_APPSCRIPT = "PEGA_AQUI_TU_URL_DE_APPSCRIPT_DESPLEGADA"; 
 
-      const iniciarLectorContinuo = async () => {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+    let baseRAM = new Set();
+    let usuariosLista = [];
+    let escaneando = false;
+    let ultimoEscaneoTiempo = 0;
+    let conteoTurno = 0;
+    let usuarioActual = localStorage.getItem("inv_usuario") || "";
+    
+    // Configuración recuperada o por defecto
+    let cooldownSegundos = parseFloat(localStorage.getItem("inv_cooldown")) || 1.8;
 
-        try {
-          const html5QrCode = new Html5Qrcode("reader");
-          scannerRef.current = html5QrCode;
-
-          const config = { 
-            fps: 15, 
-            qrbox: { width: 250, height: 150 },
-            aspectRatio: 1.0
-          };
-
-          setEscaneando(true);
-
-          await html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText) => {
-              const codigoLeido = decodedText.trim();
-              const ahora = Date.now();
-
-              if (codigoLeido !== ultimoCodigoRef.current || (ahora - tiempoUltimoEscaneoRef.current) > 1500) {
-                ultimoCodigoRef.current = codigoLeido;
-                tiempoUltimoEscaneoRef.current = ahora;
-                procesarCodigoLocal(codigoLeido);
-              }
-            },
-            () => {}
-          );
-
-        } catch (err) {
-          setEscaneando(false);
-          alert("Error de inicio de cámara: " + err);
-        }
-      };
-
-      const detenerLector = async () => {
-        if (scannerRef.current && escaneando) {
-          try {
-            await scannerRef.current.stop();
-            scannerRef.current.clear();
-          } catch(e) {}
-          setEscaneando(false);
-        }
-      };
-
-      const procesarCodigoLocal = (codigo) => {
-        const existe = dbLocal.some(codigoBase => codigo.includes(codigoBase));
-
-        if (existe) {
-          sonarExito();
-          setHistorial(prev => [{ success: true, codigo: codigo, fecha: new Date().toLocaleTimeString() }, ...prev.slice(0, 9)]);
-          
-          fetch(WEB_APP_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ codigo: codigo })
-          });
-        } else {
-          sonarError();
-          setHistorial(prev => [{ success: false, codigo: codigo, fecha: new Date().toLocaleTimeString() }, ...prev.slice(0, 9)]);
-        }
-      };
-
-      return (
-        <div class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto">
-          
-          <div class="space-y-4">
-            <div class="flex justify-between items-center border-b border-gray-800 pb-3">
-              <h1 class="text-sm font-bold tracking-wider uppercase text-gray-200">
-                ⚡ ESCÁNER CONTINUO
-              </h1>
-              <span class="text-xs font-mono font-bold text-emerald-400">RAM: {dbLocal.length} regs</span>
-            </div>
-
-            <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative min-h-[300px] flex flex-col items-center justify-center shadow-2xl">
-              
-              <div id="reader" class="w-full h-full"></div>
-
-              {!escaneando && (
-                <div class="p-6 text-center space-y-4 absolute inset-0 bg-gray-900 flex flex-col justify-center items-center z-10">
-                  <p class="text-sm text-gray-400">
-                    {cargandoBase ? "Cargando registros desde la nube..." : "Listo para escanear"}
-                  </p>
-                  <button 
-                    onClick={iniciarLectorContinuo}
-                    disabled={cargandoBase}
-                    class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-base py-4 px-8 rounded-xl shadow-lg transition disabled:opacity-50"
-                  >
-                    ⚡ INICIAR CÁMARA
-                  </button>
-                </div>
-              )}
-
-              {escaneando && (
-                <button 
-                  onClick={detenerLector}
-                  class="absolute top-3 right-3 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-lg z-20 shadow-md"
-                >
-                  Detener
-                </button>
-              )}
-            </div>
-          </div>
-
-          {historial.length > 0 && (
-            <div class="mt-4 border-t border-gray-800 pt-3">
-              <p class="text-xs text-gray-400 mb-2 font-bold uppercase tracking-wider">Últimas lecturas</p>
-              <div class="space-y-1 max-h-48 overflow-y-auto">
-                {historial.map((item, idx) => (
-                  <div key={idx} class={`flex justify-between items-center px-3 py-2 rounded font-mono text-sm ${item.success ? 'bg-gray-900 text-emerald-400 border border-emerald-900/40' : 'bg-red-950/40 text-red-400 border border-red-900/60'}`}>
-                    <span>{item.codigo}</span>
-                    <span class="text-xs font-bold">{item.success ? 'OK' : 'NO EXISTE'}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-        </div>
-      );
+    async function cargarDatos() {
+      try {
+        const resp = await fetch(URL_APPSCRIPT);
+        const data = await resp.json();
+        
+        baseRAM = new Set(data.codigos);
+        usuariosLista = data.usuarios || [];
+        
+        document.getElementById("ramText").innerText = `RAM: ${baseRAM.size} regs`;
+        poblarSelectorUsuarios();
+      } catch (e) {
+        document.getElementById("ramText").innerText = "Error al cargar";
+      }
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    function poblarSelectorUsuarios() {
+      const select = document.getElementById("selectUsuario");
+      select.innerHTML = "";
+
+      if (usuariosLista.length === 0) {
+        select.innerHTML = `<option value="">Sin Usuarios Activos</option>`;
+        return;
+      }
+
+      usuariosLista.forEach(user => {
+        const opt = document.createElement("option");
+        opt.value = user;
+        opt.textContent = user;
+        select.appendChild(opt);
+      });
+
+      if (usuariosLista.includes(usuarioActual)) {
+        select.value = usuarioActual;
+      } else {
+        usuarioActual = usuariosLista[0];
+        select.value = usuarioActual;
+        localStorage.setItem("inv_usuario", usuarioActual);
+      }
+    }
+
+    function cambiarUsuario() {
+      const select = document.getElementById("selectUsuario");
+      usuarioActual = select.value;
+      localStorage.setItem("inv_usuario", usuarioActual);
+      conteoTurno = 0;
+      document.getElementById("cntSesion").innerText = "0";
+    }
+
+    function enviarAGoogleSheets(codigo, accion = "guardar") {
+      const formData = new FormData();
+      formData.append("codigo", codigo);
+      formData.append("usuario", usuarioActual);
+      formData.append("accion", accion);
+      fetch(URL_APPSCRIPT, { method: "POST", body: formData });
+    }
+
+    function procesarCodigo(codigo) {
+      // 1. Validar que sea un EAN-13 válido (Exactamente 13 dígitos y comience con '1')
+      const esValidoEAN13 = /^1\d{12}$/.test(codigo);
+      if (!esValidoEAN13) return; // Ignora cualquier otro código sin interrumpir
+
+      // 2. Controlar enfriamiento dinámico según configuración
+      const ahora = Date.now();
+      if (ahora - ultimoEscaneoTiempo < (cooldownSegundos * 1000)) return;
+      ultimoEscaneoTiempo = ahora;
+
+      if (!usuarioActual) {
+        alert("Por favor selecciona un usuario válido");
+        return;
+      }
+
+      const existe = baseRAM.has(codigo);
+      
+      if (existe) {
+        conteoTurno++;
+        document.getElementById("cntSesion").innerText = conteoTurno;
+        enviarAGoogleSheets(codigo, "guardar");
+        agregarALista(codigo, true);
+      } else {
+        agregarALista(codigo, false);
+      }
+    }
+
+    function agregarALista(codigo, existe) {
+      const lista = document.getElementById("listaLecturas");
+      const div = document.createElement("div");
+      div.className = `item-lectura ${existe ? 'item-ok' : 'item-no-existe'}`;
+      
+      const btnBorrarHtml = existe 
+        ? `<button class="btn-delete" onclick="borrarLectura(this, '${codigo}')">Borrar</button>` 
+        : '';
+
+      div.innerHTML = `
+        <span>${codigo}</span>
+        <div style="display:flex; align-items:center;">
+          <span>${existe ? 'OK' : 'NO EXISTE'}</span>
+          ${btnBorrarHtml}
+        </div>
+      `;
+
+      lista.prepend(div);
+
+      if (lista.children.length > 8) {
+        lista.removeChild(lista.lastChild);
+      }
+    }
+
+    function borrarLectura(btnElemento, codigo) {
+      if (confirm(`¿Deseas eliminar el escaneo del código ${codigo}?`)) {
+        const fila = btnElemento.closest(".item-lectura");
+        fila.remove();
+
+        if (conteoTurno > 0) {
+          conteoTurno--;
+          document.getElementById("cntSesion").innerText = conteoTurno;
+        }
+
+        enviarAGoogleSheets(codigo, "eliminar");
+      }
+    }
+
+    // Funciones del Modal de Configuración
+    function abrirConfiguracion() {
+      document.getElementById("inputCooldown").value = cooldownSegundos;
+      document.getElementById("modalConfig").style.display = "flex";
+    }
+
+    function guardarConfiguracion() {
+      const val = parseFloat(document.getElementById("inputCooldown").value);
+      if (val >= 0.5 && val <= 5.0) {
+        cooldownSegundos = val;
+        localStorage.setItem("inv_cooldown", cooldownSegundos);
+        document.getElementById("modalConfig").style.display = "none";
+      } else {
+        alert("Introduce un tiempo entre 0.5 y 5.0 segundos.");
+      }
+    }
+
+    function iniciarCamara() {
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: document.querySelector("#interactive"),
+          constraints: { facingMode: "environment" }
+        },
+        decoder: { readers: ["ean_reader"] } // Configurado específicamente para EAN-13
+      }, function(err) {
+        if (!err) {
+          Quagga.start();
+          escaneando = true;
+        }
+      });
+
+      Quagga.onDetected(res => {
+        if (res && res.codeResult && res.codeResult.code) {
+          procesarCodigo(res.codeResult.code.trim());
+        }
+      });
+    }
+
+    function toggleCamara() {
+      const btn = document.getElementById("btnToggleCam");
+      if (escaneando) {
+        Quagga.stop();
+        escaneando = false;
+        btn.innerText = "Iniciar";
+        btn.style.background = "#10b981";
+      } else {
+        iniciarCamara();
+        btn.innerText = "Detener";
+        btn.style.background = "#ef4444";
+      }
+    }
+
+    cargarDatos();
+    iniciarCamara();
   </script>
 </body>
 </html>
