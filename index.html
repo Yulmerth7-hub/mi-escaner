@@ -60,11 +60,13 @@
       const [usuarioSel, setUsuarioSel] = useState(localStorage.getItem("inv_usuario") || "");
       const [cargandoBase, setCargandoBase] = useState(true);
       const [escaneando, setEscaneando] = useState(false);
-      const [historial, setHistorial] = useState([]);
+      
+      // ESTADO AGRUPADO POR USUARIO: { "Yulmerth": { contador: 10, historial: [...] } }
+      const [datosUsuarios, setDatosUsuarios] = useState({});
+      
       const [codigoManual, setCodigoManual] = useState("");
       const [cooldown, setCooldown] = useState(parseFloat(localStorage.getItem("inv_cooldown")) || 1.5);
       const [mostrarModal, setMostrarModal] = useState(false);
-      const [contadorTurno, setContadorTurno] = useState(0);
 
       const scannerRef = useRef(null);
       const ultimoCodigoRef = useRef('');
@@ -101,8 +103,12 @@
       const cambiarUsuario = (u) => {
         setUsuarioSel(u);
         localStorage.setItem("inv_usuario", u);
-        setContadorTurno(0);
       };
+
+      // Obtener datos del usuario seleccionado actualmente
+      const usrKey = usuarioSel || "Anónimo";
+      const contadorTurno = datosUsuarios[usrKey]?.contador || 0;
+      const historial = datosUsuarios[usrKey]?.historial || [];
 
       const iniciarLectorContinuo = async () => {
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -111,7 +117,6 @@
           const html5QrCode = new Html5Qrcode("reader");
           scannerRef.current = html5QrCode;
 
-          // Configuración optimizada para lecturas en cualquier orientación
           const config = { 
             fps: 20, 
             qrbox: { width: 230, height: 210 },
@@ -153,57 +158,48 @@
       };
 
       const procesarCodigoLocal = (codigo) => {
-        // 1. Validación de formato (7 dígitos O 13 dígitos empezando por '1')
         const esValido7 = /^\d{7}$/.test(codigo);
         const esValido13 = /^1\d{12}$/.test(codigo);
 
         if (!esValido7 && !esValido13) {
           sonarError();
-          setHistorial(prev => [
-            { 
-              id: Date.now(), 
-              success: false, 
-              estadoText: "INVÁLIDO", 
-              codigo: codigo, 
-              fecha: new Date().toLocaleTimeString() 
-            }, 
-            ...prev.slice(0, 9)
-          ]);
+          actualizarEstadoUsuario(false, "INVÁLIDO", codigo);
           return;
         }
 
-        // 2. Validación de existencia en la base de datos (RAM)
         const existe = dbLocal.some(codigoBase => String(codigo).includes(String(codigoBase).trim()));
 
         if (existe) {
           sonarExito();
-          setContadorTurno(prev => prev + 1);
-          
-          setHistorial(prev => [
-            { 
-              id: Date.now(), 
-              success: true, 
-              estadoText: "OK", 
-              codigo: codigo, 
-              fecha: new Date().toLocaleTimeString() 
-            }, 
-            ...prev.slice(0, 9)
-          ]);
-          
+          actualizarEstadoUsuario(true, "OK", codigo);
           enviarAGoogleSheets(codigo, "guardar");
         } else {
           sonarError();
-          setHistorial(prev => [
-            { 
-              id: Date.now(), 
-              success: false, 
-              estadoText: "NO EXISTE", 
-              codigo: codigo, 
-              fecha: new Date().toLocaleTimeString() 
-            }, 
-            ...prev.slice(0, 9)
-          ]);
+          actualizarEstadoUsuario(false, "NO EXISTE", codigo);
         }
+      };
+
+      const actualizarEstadoUsuario = (esExito, estadoText, codigo) => {
+        setDatosUsuarios(prev => {
+          const usrActual = usuarioSel || "Anónimo";
+          const datosPrevios = prev[usrActual] || { contador: 0, historial: [] };
+
+          const nuevoRegistro = {
+            id: Date.now(),
+            success: esExito,
+            estadoText: estadoText,
+            codigo: codigo,
+            fecha: new Date().toLocaleTimeString()
+          };
+
+          return {
+            ...prev,
+            [usrActual]: {
+              contador: esExito ? datosPrevios.contador + 1 : datosPrevios.contador,
+              historial: [nuevoRegistro, ...datosPrevios.historial.slice(0, 9)]
+            }
+          };
+        });
       };
 
       const enviarAGoogleSheets = (codigo, accion) => {
@@ -231,10 +227,19 @@
 
       const borrarLectura = (item) => {
         if (confirm(`¿Deseas eliminar el registro ${item.codigo}?`)) {
-          setHistorial(prev => prev.filter(i => i.id !== item.id));
-          if (item.success && contadorTurno > 0) {
-            setContadorTurno(prev => prev - 1);
-          }
+          setDatosUsuarios(prev => {
+            const usrActual = usuarioSel || "Anónimo";
+            const datosPrevios = prev[usrActual] || { contador: 0, historial: [] };
+
+            return {
+              ...prev,
+              [usrActual]: {
+                contador: (item.success && datosPrevios.contador > 0) ? datosPrevios.contador - 1 : datosPrevios.contador,
+                historial: datosPrevios.historial.filter(i => i.id !== item.id)
+              }
+            };
+          });
+
           enviarAGoogleSheets(item.codigo, "eliminar");
         }
       };
@@ -282,7 +287,7 @@
             </div>
           </div>
 
-          {/* Cuadro de la Cámara con Altura Óptima */}
+          {/* Cuadro de la Cámara */}
           <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative min-h-[260px] flex flex-col items-center justify-center shadow-2xl">
             <div id="reader" class="w-full h-full"></div>
 
@@ -328,10 +333,10 @@
             </button>
           </form>
 
-          {/* Lista de Últimas Lecturas */}
+          {/* Lista de Últimas Lecturas del Usuario Seleccionado */}
           {historial.length > 0 && (
             <div class="border-t border-gray-800 pt-2">
-              <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas</p>
+              <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas ({usuarioSel})</p>
               <div class="space-y-1 max-h-44 overflow-y-auto">
                 {historial.map((item) => (
                   <div key={item.id} class={`flex justify-between items-center px-3 py-1.5 rounded font-mono text-xs ${item.success ? 'bg-gray-900 text-emerald-400 border border-emerald-900/40' : 'bg-red-950/40 text-red-400 border border-red-900/60'}`}>
