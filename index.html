@@ -159,7 +159,13 @@
         if (!esValido7 && !esValido13) {
           sonarError();
           setHistorial(prev => [
-            { id: Date.now(), success: false, codigo: `${codigo} (FORMATO INVALIDO)`, fecha: new Date().toLocaleTimeString() }, 
+            { 
+              id: Date.now(), 
+              success: false, 
+              estadoText: "INVÁLIDO", 
+              codigo: codigo, 
+              fecha: new Date().toLocaleTimeString() 
+            }, 
             ...prev.slice(0, 9)
           ]);
           return;
@@ -173,7 +179,13 @@
           setContadorTurno(prev => prev + 1);
           
           setHistorial(prev => [
-            { id: Date.now(), success: true, codigo: codigo, fecha: new Date().toLocaleTimeString() }, 
+            { 
+              id: Date.now(), 
+              success: true, 
+              estadoText: "OK", 
+              codigo: codigo, 
+              fecha: new Date().toLocaleTimeString() 
+            }, 
             ...prev.slice(0, 9)
           ]);
           
@@ -181,7 +193,13 @@
         } else {
           sonarError();
           setHistorial(prev => [
-            { id: Date.now(), success: false, codigo: codigo, fecha: new Date().toLocaleTimeString() }, 
+            { 
+              id: Date.now(), 
+              success: false, 
+              estadoText: "NO EXISTE", 
+              codigo: codigo, 
+              fecha: new Date().toLocaleTimeString() 
+            }, 
             ...prev.slice(0, 9)
           ]);
         }
@@ -227,100 +245,98 @@
       };
 
       return (
-        <div class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto relative">
+        <div class="flex flex-col p-3 max-w-md mx-auto relative gap-3">
           
-          <div class="space-y-3">
-            {/* Cabecera */}
-            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
-              <div class="flex items-center gap-2">
-                <h1 class="text-xs font-bold tracking-wider uppercase text-gray-200">
-                  ⚡ ESCÁNER CONTINUO
-                </h1>
-                <button 
-                  onClick={() => setMostrarModal(true)} 
-                  class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded border border-gray-700"
-                >
-                  ⚙️
-                </button>
-              </div>
-              <span class="text-xs font-mono font-bold text-emerald-400">RAM: {dbLocal.length} regs</span>
-            </div>
-
-            {/* Selector de Usuario y Contador */}
-            <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded-xl border border-gray-800 text-xs">
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">Usuario:</span>
-                <select 
-                  value={usuarioSel} 
-                  onChange={(e) => cambiarUsuario(e.target.value)}
-                  class="bg-gray-950 text-emerald-400 font-bold px-2 py-1 rounded border border-gray-800 focus:outline-none"
-                >
-                  {usuarios.length === 0 && <option value="">Sin Usuarios</option>}
-                  {usuarios.map((u, i) => <option key={i} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div>
-                Turno: <span class="text-emerald-400 font-bold text-sm">{contadorTurno}</span>
-              </div>
-            </div>
-
-            {/* Cuadro de la Cámara */}
-            <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative min-h-[240px] flex flex-col items-center justify-center shadow-2xl">
-              <div id="reader" class="w-full h-full"></div>
-
-              {!escaneando && (
-                <div class="p-6 text-center space-y-4 absolute inset-0 bg-gray-900 flex flex-col justify-center items-center z-10">
-                  <p class="text-xs text-gray-400">
-                    {cargandoBase ? "Cargando registros desde la nube..." : "Listo para escanear"}
-                  </p>
-                  <button 
-                    onClick={iniciarLectorContinuo}
-                    disabled={cargandoBase}
-                    class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm py-3 px-6 rounded-xl shadow-lg transition disabled:opacity-50"
-                  >
-                    ⚡ INICIAR CÁMARA
-                  </button>
-                </div>
-              )}
-
-              {escaneando && (
-                <button 
-                  onClick={detenerLector}
-                  class="absolute top-3 right-3 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-lg z-20 shadow-md"
-                >
-                  Detener
-                </button>
-              )}
-            </div>
-
-            {/* Ingreso Manual o por Escáner Externo */}
-            <form onSubmit={manejarEnvioManual} class="flex gap-2">
-              <input 
-                type="number"
-                placeholder="Manual (7 dígitos o 13 iniciando en 1)"
-                value={codigoManual}
-                onChange={(e) => setCodigoManual(e.target.value)}
-                class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-              />
+          {/* Cabecera */}
+          <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+            <div class="flex items-center gap-2">
+              <h1 class="text-xs font-bold tracking-wider uppercase text-gray-200">
+                ⚡ ESCÁNER CONTINUO
+              </h1>
               <button 
-                type="submit"
-                class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl active:scale-95 transition"
+                onClick={() => setMostrarModal(true)} 
+                class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded border border-gray-700"
               >
-                Agregar
+                ⚙️
               </button>
-            </form>
+            </div>
+            <span class="text-xs font-mono font-bold text-emerald-400">RAM: {dbLocal.length} regs</span>
           </div>
+
+          {/* Selector de Usuario y Contador */}
+          <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded-xl border border-gray-800 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-gray-400">Usuario:</span>
+              <select 
+                value={usuarioSel} 
+                onChange={(e) => cambiarUsuario(e.target.value)}
+                class="bg-gray-950 text-emerald-400 font-bold px-2 py-1 rounded border border-gray-800 focus:outline-none"
+              >
+                {usuarios.length === 0 && <option value="">Sin Usuarios</option>}
+                {usuarios.map((u, i) => <option key={i} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              Turno: <span class="text-emerald-400 font-bold text-sm">{contadorTurno}</span>
+            </div>
+          </div>
+
+          {/* Cuadro de la Cámara */}
+          <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative h-[210px] flex flex-col items-center justify-center shadow-2xl">
+            <div id="reader" class="w-full h-full"></div>
+
+            {!escaneando && (
+              <div class="p-6 text-center space-y-4 absolute inset-0 bg-gray-900 flex flex-col justify-center items-center z-10">
+                <p class="text-xs text-gray-400">
+                  {cargandoBase ? "Cargando registros desde la nube..." : "Listo para escanear"}
+                </p>
+                <button 
+                  onClick={iniciarLectorContinuo}
+                  disabled={cargandoBase}
+                  class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm py-3 px-6 rounded-xl shadow-lg transition disabled:opacity-50"
+                >
+                  ⚡ INICIAR CÁMARA
+                </button>
+              </div>
+            )}
+
+            {escaneando && (
+              <button 
+                onClick={detenerLector}
+                class="absolute top-3 right-3 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-lg z-20 shadow-md"
+              >
+                Detener
+              </button>
+            )}
+          </div>
+
+          {/* Ingreso Manual */}
+          <form onSubmit={manejarEnvioManual} class="flex gap-2">
+            <input 
+              type="number"
+              placeholder="Manual (7 dígitos o 13 iniciando en 1)"
+              value={codigoManual}
+              onChange={(e) => setCodigoManual(e.target.value)}
+              class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
+            <button 
+              type="submit"
+              class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl active:scale-95 transition"
+            >
+              Agregar
+            </button>
+          </form>
 
           {/* Lista de Últimas Lecturas */}
           {historial.length > 0 && (
-            <div class="mt-3 border-t border-gray-800 pt-2">
+            <div class="border-t border-gray-800 pt-2">
               <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas</p>
-              <div class="space-y-1 max-h-40 overflow-y-auto">
+              <div class="space-y-1 max-h-48 overflow-y-auto">
                 {historial.map((item) => (
                   <div key={item.id} class={`flex justify-between items-center px-3 py-1.5 rounded font-mono text-xs ${item.success ? 'bg-gray-900 text-emerald-400 border border-emerald-900/40' : 'bg-red-950/40 text-red-400 border border-red-900/60'}`}>
                     <span>{item.codigo}</span>
                     <div class="flex items-center gap-2">
-                      <span class="text-[10px] font-bold">{item.success ? 'OK' : 'NO EXISTE'}</span>
+                      <span class="text-[10px] font-bold uppercase">{item.estadoText}</span>
                       {item.success && (
                         <button 
                           onClick={() => borrarLectura(item)}
