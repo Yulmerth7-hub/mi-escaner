@@ -61,8 +61,15 @@
       const [cargandoBase, setCargandoBase] = useState(true);
       const [escaneando, setEscaneando] = useState(false);
       
-      // ESTADO AGRUPADO POR USUARIO: { "Yulmerth": { contador: 10, historial: [...] } }
-      const [datosUsuarios, setDatosUsuarios] = useState({});
+      // CARGAR DATOS DE USUARIOS DESDE LOCALSTORAGE SI EXISTEN
+      const [datosUsuarios, setDatosUsuarios] = useState(() => {
+        try {
+          const guardado = localStorage.getItem("inv_datos_usuarios");
+          return guardado ? JSON.parse(guardado) : {};
+        } catch(e) {
+          return {};
+        }
+      });
       
       const [codigoManual, setCodigoManual] = useState("");
       const [cooldown, setCooldown] = useState(parseFloat(localStorage.getItem("inv_cooldown")) || 1.5);
@@ -75,6 +82,13 @@
       useEffect(() => {
         cargarBaseEnRAM();
       }, []);
+
+      // GUARDAR AUTOMÁTICAMENTE EN LOCALSTORAGE ANTE CUALQUIER CAMBIO
+      useEffect(() => {
+        try {
+          localStorage.setItem("inv_datos_usuarios", JSON.stringify(datosUsuarios));
+        } catch(e) {}
+      }, [datosUsuarios]);
 
       const cargarBaseEnRAM = async () => {
         setCargandoBase(true);
@@ -105,7 +119,6 @@
         localStorage.setItem("inv_usuario", u);
       };
 
-      // Obtener datos del usuario seleccionado actualmente
       const usrKey = usuarioSel || "Anónimo";
       const contadorTurno = datosUsuarios[usrKey]?.contador || 0;
       const historial = datosUsuarios[usrKey]?.historial || [];
@@ -244,6 +257,14 @@
         }
       };
 
+      const reiniciarTurno = () => {
+        if (confirm(`¿Deseas reiniciar los contadores e historial de TODOS los usuarios en este dispositivo?`)) {
+          setDatosUsuarios({});
+          localStorage.removeItem("inv_datos_usuarios");
+          setMostrarModal(false);
+        }
+      };
+
       const guardarAjustes = (nuevoCooldown) => {
         setCooldown(nuevoCooldown);
         localStorage.setItem("inv_cooldown", nuevoCooldown);
@@ -363,6 +384,7 @@
             <div class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
               <div class="bg-gray-900 border border-gray-800 p-4 rounded-2xl w-full max-w-xs space-y-4">
                 <h3 class="text-sm font-bold text-gray-200">⚙️ Ajustes de Escáner</h3>
+                
                 <div>
                   <label class="text-xs text-gray-400 block mb-1">Enfriamiento entre lecturas (seg):</label>
                   <input 
@@ -375,7 +397,17 @@
                     class="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white"
                   />
                 </div>
-                <div class="flex justify-end gap-2">
+
+                <div class="border-t border-gray-800 pt-3">
+                  <button 
+                    onClick={reiniciarTurno}
+                    class="w-full bg-red-900/50 hover:bg-red-900 text-red-300 border border-red-700/50 text-xs font-bold py-2 rounded-lg transition"
+                  >
+                    🗑️ Reiniciar Contadores Locales
+                  </button>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
                   <button 
                     onClick={() => setMostrarModal(false)}
                     class="text-xs text-gray-400 px-3 py-1.5"
