@@ -152,7 +152,16 @@
       };
 
       const procesarCodigoLocal = (codigo) => {
-        // Valida si el código de barras escaneado CONTIENE el código de la base de datos o si es idéntico
+        // --- FILTRO DE VALIDACIÓN ---
+        // Permite exactamente 7 dígitos O 13 dígitos que comiencen con '1'
+        const esValido7 = /^\d{7}$/.test(codigo);
+        const esValido13 = /^1\d{12}$/.test(codigo);
+
+        if (!esValido7 && !esValido13) {
+          return; // Ignora silenciosamente lecturas basura, QRs u otros formatos
+        }
+
+        // Valida coincidencia contra la base de datos en RAM
         const existe = dbLocal.some(codigoBase => String(codigo).includes(String(codigoBase).trim()));
 
         if (existe) {
@@ -190,8 +199,20 @@
 
       const manejarEnvioManual = (e) => {
         e.preventDefault();
-        if (!codigoManual.trim()) return;
-        procesarCodigoLocal(codigoManual.trim());
+        const texto = codigoManual.trim();
+        
+        if (!texto) return;
+
+        // Comprobación de validación para el ingreso manual
+        const es7 = /^\d{7}$/.test(texto);
+        const es13 = /^1\d{12}$/.test(texto);
+
+        if (!es7 && !es13) {
+          alert("El código debe tener 7 dígitos o 13 dígitos empezando por 1.");
+          return;
+        }
+
+        procesarCodigoLocal(texto);
         setCodigoManual("");
       };
 
@@ -282,10 +303,10 @@
             <form onSubmit={manejarEnvioManual} class="flex gap-2">
               <input 
                 type="number"
-                placeholder="Ingreso manual (ej. 5016977)"
+                placeholder="Manual (7 dígitos o 13 iniciando en 1)"
                 value={codigoManual}
                 onChange={(e) => setCodigoManual(e.target.value)}
-                class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
               <button 
                 type="submit"
