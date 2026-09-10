@@ -152,16 +152,20 @@
       };
 
       const procesarCodigoLocal = (codigo) => {
-        // --- FILTRO DE VALIDACIÓN ---
-        // Permite exactamente 7 dígitos O 13 dígitos que comiencen con '1'
+        // 1. Validación de formato (7 dígitos O 13 dígitos empezando por '1')
         const esValido7 = /^\d{7}$/.test(codigo);
         const esValido13 = /^1\d{12}$/.test(codigo);
 
         if (!esValido7 && !esValido13) {
-          return; // Ignora silenciosamente lecturas basura, QRs u otros formatos
+          sonarError();
+          setHistorial(prev => [
+            { id: Date.now(), success: false, codigo: `${codigo} (FORMATO INVALIDO)`, fecha: new Date().toLocaleTimeString() }, 
+            ...prev.slice(0, 9)
+          ]);
+          return;
         }
 
-        // Valida coincidencia contra la base de datos en RAM
+        // 2. Validación de existencia en la base de datos (RAM)
         const existe = dbLocal.some(codigoBase => String(codigo).includes(String(codigoBase).trim()));
 
         if (existe) {
@@ -200,17 +204,7 @@
       const manejarEnvioManual = (e) => {
         e.preventDefault();
         const texto = codigoManual.trim();
-        
         if (!texto) return;
-
-        // Comprobación de validación para el ingreso manual
-        const es7 = /^\d{7}$/.test(texto);
-        const es13 = /^1\d{12}$/.test(texto);
-
-        if (!es7 && !es13) {
-          alert("El código debe tener 7 dígitos o 13 dígitos empezando por 1.");
-          return;
-        }
 
         procesarCodigoLocal(texto);
         setCodigoManual("");
@@ -299,7 +293,7 @@
               )}
             </div>
 
-            {/* Ingreso Manual de Código */}
+            {/* Ingreso Manual o por Escáner Externo */}
             <form onSubmit={manejarEnvioManual} class="flex gap-2">
               <input 
                 type="number"
@@ -317,7 +311,7 @@
             </form>
           </div>
 
-          {/* Lista de Últimas Lecturas con Botón Borrar */}
+          {/* Lista de Últimas Lecturas */}
           {historial.length > 0 && (
             <div class="mt-3 border-t border-gray-800 pt-2">
               <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas</p>
