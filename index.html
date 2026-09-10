@@ -111,9 +111,10 @@
           const html5QrCode = new Html5Qrcode("reader");
           scannerRef.current = html5QrCode;
 
+          // Configuración optimizada para lecturas en cualquier orientación
           const config = { 
             fps: 20, 
-            qrbox: { width: 260, height: 160 },
+            qrbox: { width: 230, height: 210 },
             aspectRatio: 1.0
           };
 
@@ -245,7 +246,7 @@
       };
 
       return (
-        <div class="flex flex-col p-3 max-w-md mx-auto relative gap-3">
+        <div class="flex flex-col p-3 max-w-md mx-auto relative gap-2.5">
           
           {/* Cabecera */}
           <div class="flex justify-between items-center border-b border-gray-800 pb-2">
@@ -281,8 +282,8 @@
             </div>
           </div>
 
-          {/* Cuadro de la Cámara */}
-          <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative h-[210px] flex flex-col items-center justify-center shadow-2xl">
+          {/* Cuadro de la Cámara con Altura Óptima */}
+          <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative min-h-[260px] flex flex-col items-center justify-center shadow-2xl">
             <div id="reader" class="w-full h-full"></div>
 
             {!escaneando && (
@@ -331,7 +332,7 @@
           {historial.length > 0 && (
             <div class="border-t border-gray-800 pt-2">
               <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas</p>
-              <div class="space-y-1 max-h-48 overflow-y-auto">
+              <div class="space-y-1 max-h-44 overflow-y-auto">
                 {historial.map((item) => (
                   <div key={item.id} class={`flex justify-between items-center px-3 py-1.5 rounded font-mono text-xs ${item.success ? 'bg-gray-900 text-emerald-400 border border-emerald-900/40' : 'bg-red-950/40 text-red-400 border border-red-900/60'}`}>
                     <span>{item.codigo}</span>
