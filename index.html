@@ -56,21 +56,31 @@
 
     function App() {
       const [dbLocal, setDbLocal] = useState([]);
-      const [usuarios, setUsuarios] = useState([]);
-      const [usuarioSel, setUsuarioSel] = useState(localStorage.getItem("inv_usuario") || "");
+      const [listaUsuarios, setListaUsuarios] = useState([]);
+      const [usuarioActivo, setUsuarioActivo] = useState(() => {
+        try {
+          const u = localStorage.getItem("inv_usuario_activo");
+          return u ? JSON.parse(u) : null;
+        } catch(e) { return null; }
+      });
+
+      // ESTADOS FORMULARIO LOGIN
+      const [inputDni, setInputDni] = useState("");
+      const [inputPass, setInputPass] = useState("");
+      const [errorLogin, setErrorLogin] = useState("");
+
       const [cargandoBase, setCargandoBase] = useState(true);
       const [escaneando, setEscaneando] = useState(false);
-      
-      // CARGAR DATOS DE USUARIOS DESDE LOCALSTORAGE SI EXISTEN
+      const [linternaEncendida, setLinternaEncendida] = useState(false);
+
+      // REGISTRO DE DATOS Y CONTEO POR USUARIO
       const [datosUsuarios, setDatosUsuarios] = useState(() => {
         try {
           const guardado = localStorage.getItem("inv_datos_usuarios");
           return guardado ? JSON.parse(guardado) : {};
-        } catch(e) {
-          return {};
-        }
+        } catch(e) { return {}; }
       });
-      
+
       const [codigoManual, setCodigoManual] = useState("");
       const [cooldown, setCooldown] = useState(parseFloat(localStorage.getItem("inv_cooldown")) || 1.5);
       const [mostrarModal, setMostrarModal] = useState(false);
@@ -83,7 +93,6 @@
         cargarBaseEnRAM();
       }, []);
 
-      // GUARDAR AUTOMÁTICAMENTE EN LOCALSTORAGE ANTE CUALQUIER CAMBIO
       useEffect(() => {
         try {
           localStorage.setItem("inv_datos_usuarios", JSON.stringify(datosUsuarios));
@@ -96,16 +105,8 @@
           const res = await fetch(WEB_APP_URL, { redirect: "follow" });
           const data = await res.json();
           
-          const codigos = Array.isArray(data) ? data : (data.codigos || []);
-          const usrs = data.usuarios || [];
-
-          setDbLocal(codigos);
-          setUsuarios(usrs);
-
-          if (usrs.length > 0 && !usrs.includes(usuarioSel)) {
-            setUsuarioSel(usrs[0]);
-            localStorage.setItem("inv_usuario", usrs[0]);
-          }
+          setDbLocal(data.codigos || []);
+          setListaUsuarios(data.usuarios || []);
 
           setCargandoBase(false);
         } catch (err) {
@@ -114,12 +115,37 @@
         }
       };
 
-      const cambiarUsuario = (u) => {
-        setUsuarioSel(u);
-        localStorage.setItem("inv_usuario", u);
+      const manejarLogin = (e) => {
+        e.preventDefault();
+        setErrorLogin("");
+
+        const encontrado = listaUsuarios.find(
+          u => String(u.dni).trim() === String(inputDni).trim() && String(u.pass).trim() === String(inputPass).trim()
+        );
+
+        if (!encontrado) {
+          setErrorLogin("DNI o contraseña incorrectos.");
+          return;
+        }
+
+        if (encontrado.estado.toLowerCase() !== "activo") {
+          setErrorLogin("Tu usuario está inactivo. Consulta al administrador.");
+          return;
+        }
+
+        setUsuarioActivo(encontrado);
+        localStorage.setItem("inv_usuario_activo", JSON.stringify(encontrado));
+        setInputDni("");
+        setInputPass("");
       };
 
-      const usrKey = usuarioSel || "Anónimo";
+      const cerrarSesion = () => {
+        detenerLector();
+        setUsuarioActivo(null);
+        localStorage.removeItem("inv_usuario_activo");
+      };
+
+      const usrKey = usuarioActivo ? usuarioActivo.nombre : "Anónimo";
       const contadorTurno = datosUsuarios[usrKey]?.contador || 0;
       const historial = datosUsuarios[usrKey]?.historial || [];
 
@@ -137,6 +163,7 @@
           };
 
           setEscaneando(true);
+          setLinternaEncendida(false);
 
           await html5QrCode.start(
             { facingMode: "environment" },
@@ -167,6 +194,21 @@
             scannerRef.current.clear();
           } catch(e) {}
           setEscaneando(false);
+          setLinternaEncendida(false);
+        }
+      };
+
+      const toggleLinterna = async () => {
+        if (scannerRef.current && escaneando) {
+          try {
+            const estadoNuevo = !linternaEncendida;
+            await scannerRef.current.applyVideoConstraints({
+              advanced: [{ torch: estadoNuevo }]
+            });
+            setLinternaEncendida(estadoNuevo);
+          } catch (err) {
+            alert("La linterna no está disponible en este dispositivo.");
+          }
         }
       };
 
@@ -194,8 +236,7 @@
 
       const actualizarEstadoUsuario = (esExito, estadoText, codigo) => {
         setDatosUsuarios(prev => {
-          const usrActual = usuarioSel || "Anónimo";
-          const datosPrevios = prev[usrActual] || { contador: 0, historial: [] };
+          const datosPrevios = prev[usrKey] || { contador: 0, historial: [] };
 
           const nuevoRegistro = {
             id: Date.now(),
@@ -207,7 +248,7 @@
 
           return {
             ...prev,
-            [usrActual]: {
+            [usrKey]: {
               contador: esExito ? datosPrevios.contador + 1 : datosPrevios.contador,
               historial: [nuevoRegistro, ...datosPrevios.historial.slice(0, 9)]
             }
@@ -218,7 +259,7 @@
       const enviarAGoogleSheets = (codigo, accion) => {
         const formData = new URLSearchParams();
         formData.append("codigo", codigo);
-        formData.append("usuario", usuarioSel || "Anónimo");
+        formData.append("usuario", usrKey);
         formData.append("accion", accion);
 
         fetch(WEB_APP_URL, {
@@ -241,12 +282,11 @@
       const borrarLectura = (item) => {
         if (confirm(`¿Deseas eliminar el registro ${item.codigo}?`)) {
           setDatosUsuarios(prev => {
-            const usrActual = usuarioSel || "Anónimo";
-            const datosPrevios = prev[usrActual] || { contador: 0, historial: [] };
+            const datosPrevios = prev[usrKey] || { contador: 0, historial: [] };
 
             return {
               ...prev,
-              [usrActual]: {
+              [usrKey]: {
                 contador: (item.success && datosPrevios.contador > 0) ? datosPrevios.contador - 1 : datosPrevios.contador,
                 historial: datosPrevios.historial.filter(i => i.id !== item.id)
               }
@@ -271,6 +311,62 @@
         setMostrarModal(false);
       };
 
+      // --- FORMULARIO LOGIN ---
+      if (!usuarioActivo) {
+        return (
+          <div class="flex flex-col justify-center items-center min-h-screen p-4 max-w-sm mx-auto">
+            <div class="w-full bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-2xl space-y-5">
+              <div class="text-center">
+                <h1 class="text-lg font-bold tracking-wider text-gray-100">⚡ INICIAR SESIÓN</h1>
+                <p class="text-xs text-gray-400 mt-1">Escáner de Inventario BATA1</p>
+              </div>
+
+              {cargandoBase ? (
+                <p class="text-xs text-center text-emerald-400 font-mono animate-pulse">Cargando base de datos...</p>
+              ) : (
+                <form onSubmit={manejarLogin} class="space-y-4">
+                  <div>
+                    <label class="text-xs text-gray-400 block mb-1">DNI:</label>
+                    <input 
+                      type="number" 
+                      required
+                      placeholder="Ingrese DNI"
+                      value={inputDni}
+                      onChange={(e) => setInputDni(e.target.value)}
+                      class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="text-xs text-gray-400 block mb-1">Contraseña:</label>
+                    <input 
+                      type="password" 
+                      required
+                      placeholder="Ingrese contraseña"
+                      value={inputPass}
+                      onChange={(e) => setInputPass(e.target.value)}
+                      class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  {errorLogin && (
+                    <p class="text-xs text-red-400 font-bold text-center">{errorLogin}</p>
+                  )}
+
+                  <button 
+                    type="submit"
+                    class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-sm py-2.5 rounded-xl transition shadow-lg"
+                  >
+                    Ingresar
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // --- ESCÁNER PRINCIPAL ---
       return (
         <div class="flex flex-col p-3 max-w-md mx-auto relative gap-2.5">
           
@@ -287,28 +383,27 @@
                 ⚙️
               </button>
             </div>
-            <span class="text-xs font-mono font-bold text-emerald-400">Base de Datos: {dbLocal.length} regs</span>
+            <span class="text-xs font-mono font-bold text-emerald-400">Base: {dbLocal.length} regs</span>
           </div>
 
-          {/* Selector de Usuario y Contador */}
+          {/* Usuario y Contador */}
           <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded-xl border border-gray-800 text-xs">
             <div class="flex items-center gap-2">
               <span class="text-gray-400">Usuario:</span>
-              <select 
-                value={usuarioSel} 
-                onChange={(e) => cambiarUsuario(e.target.value)}
-                class="bg-gray-950 text-emerald-400 font-bold px-2 py-1 rounded border border-gray-800 focus:outline-none"
+              <span class="text-emerald-400 font-bold">{usuarioActivo.nombre}</span>
+              <button 
+                onClick={cerrarSesion}
+                class="text-[10px] text-gray-400 hover:text-red-400 ml-1 underline"
               >
-                {usuarios.length === 0 && <option value="">Sin Usuarios</option>}
-                {usuarios.map((u, i) => <option key={i} value={u}>{u}</option>)}
-              </select>
+                (Salir)
+              </button>
             </div>
             <div>
               Capturados: <span class="text-emerald-400 font-bold text-sm">{contadorTurno}</span>
             </div>
           </div>
 
-          {/* Cuadro de la Cámara */}
+          {/* Cuadro Cámara */}
           <div class="bg-gray-900 border-2 border-emerald-500 rounded-2xl overflow-hidden relative min-h-[260px] flex flex-col items-center justify-center shadow-2xl">
             <div id="reader" class="w-full h-full"></div>
 
@@ -328,12 +423,20 @@
             )}
 
             {escaneando && (
-              <button 
-                onClick={detenerLector}
-                class="absolute top-3 right-3 bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-lg z-20 shadow-md"
-              >
-                Detener
-              </button>
+              <div class="absolute top-3 right-3 flex gap-2 z-20">
+                <button 
+                  onClick={toggleLinterna}
+                  class={`text-xs font-bold px-3 py-1.5 rounded-lg shadow-md transition ${linternaEncendida ? 'bg-yellow-500 text-black' : 'bg-gray-800/90 text-white border border-gray-700'}`}
+                >
+                  {linternaEncendida ? '💡 On' : '🔦 Flash'}
+                </button>
+                <button 
+                  onClick={detenerLector}
+                  class="bg-red-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-md"
+                >
+                  Detener
+                </button>
+              </div>
             )}
           </div>
 
@@ -354,10 +457,10 @@
             </button>
           </form>
 
-          {/* Lista de Últimas Lecturas del Usuario Seleccionado */}
+          {/* Lista Últimas Lecturas */}
           {historial.length > 0 && (
             <div class="border-t border-gray-800 pt-2">
-              <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas ({usuarioSel})</p>
+              <p class="text-[10px] text-gray-400 mb-1 font-bold uppercase tracking-wider">Últimas lecturas</p>
               <div class="space-y-1 max-h-44 overflow-y-auto">
                 {historial.map((item) => (
                   <div key={item.id} class={`flex justify-between items-center px-3 py-1.5 rounded font-mono text-xs ${item.success ? 'bg-gray-900 text-emerald-400 border border-emerald-900/40' : 'bg-red-950/40 text-red-400 border border-red-900/60'}`}>
